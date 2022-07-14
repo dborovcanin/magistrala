@@ -5,90 +5,67 @@ package ws
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/mainflux/mainflux/logger"
 	"github.com/mainflux/mainflux/pkg/messaging"
 )
 
 // Client wraps WS client.
-type Client interface {
-	Token() string
-	Handle(m messaging.Message) error
-	Cancel() error
+type Client struct {
+	pubID    string
+	token    string
+	chanID   string
+	subtopic string
+	conn     *websocket.Conn
 }
 
-type Connclient struct {
-	client *websocket.Conn
-	token  string
-	logger logger.Logger
-}
-
-// NewClient Instantiates a new Observer.
-func NewClient(c *websocket.Conn, token string, l logger.Logger) Client {
-	return &Connclient{
-		client: c,
-		token:  token,
-		logger: l,
+func NewClient(id, token, chanID, subtopic string, conn *websocket.Conn) Client {
+	return Client{
+		pubID:    id,
+		token:    token,
+		chanID:   chanID,
+		subtopic: subtopic,
+		conn:     conn,
 	}
 }
 
-type Channel struct {
-	Messages chan messaging.Message
-	Closed   chan bool
-	closed   bool
-	mutex    sync.Mutex
-}
+func (c Client) Publish(channelID, subtopic string, msgs chan<- messaging.Message) {
+	for {
+		_, payload, err := c.conn.ReadMessage()
+		if websocket.IsUnexpectedCloseError(err) {
+			c.conn.Close()
+			return
+		}
+		if err != nil {
+			return
+		}
 
-func NewChannel() *Channel {
-	return &Channel{
-		Messages: make(chan messaging.Message),
-		closed:   false,
-		Closed:   make(chan bool),
-		mutex:    sync.Mutex{},
+		msg := messaging.Message{
+			Protocol: "ws",
+			Channel:  channelID,
+			Subtopic: subtopic,
+			Payload:  payload,
+			Created:  time.Now().UnixNano(),
+		}
+		fmt.Println("sending ws")
+		msgs <- msg
 	}
 }
 
-func (c *Connclient) Cancel() error {
-	m := messaging.Message{
-		Protocol: "websocket",
-		Created:  time.Now().UnixNano(),
-	}
-	if err := c.client.WriteMessage(1, m.Payload); err != nil {
-		c.logger.Error(fmt.Sprintf("Error sending message: %s", err))
+func (c Client) Handle(msg messaging.Message) error {
+	format := websocket.TextMessage
+	if msg.Publisher == c.pubID {
+		return nil
 	}
 
-	return c.client.Close()
-}
-
-func (c *Connclient) Token() string {
-	return c.token
-}
-
-func (c *Connclient) Handle(msg messaging.Message) error {
-	return c.client.WriteMessage(websocket.TextMessage, msg.Payload)
-}
-
-// Send method sends message over Messages channel.
-func (c *Channel) Send(msg messaging.Message) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if !c.closed {
-		c.Messages <- msg
+	if err := c.conn.WriteMessage(format, msg.Payload); err != nil {
+		// logger.Warn(fmt.Sprintf("Failed to broadcast message to thing: %s", err))
+		return err
 	}
+	return nil
 }
 
-// Close channel and stop message transfer
-func (c *Channel) Close() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.closed = true
-	c.Closed <- true
-
-	close(c.Messages)
-	close(c.Closed)
+func (c Client) Cancel() error {
+	return c.conn.Close()
 }

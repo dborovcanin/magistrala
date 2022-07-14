@@ -32,7 +32,7 @@ type Service interface {
 	Publish(ctx context.Context, token string, msg messaging.Message) error
 
 	// Subscribes to a channel with specified id.
-	Subscribe(ctx context.Context, thingKey, chanID, subtopic string, channel Client) error
+	Subscribe(ctx context.Context, chanID, subtopic string, c Client) error
 
 	// Unsubscribe method is used to stop observing resource.
 	Unsubscribe(ctx context.Context, thingKey, chanID, subtopic string) error
@@ -69,13 +69,14 @@ func (svc *adapterService) Publish(ctx context.Context, token string, msg messag
 	return svc.pubsub.Publish(msg.GetChannel(), msg)
 }
 
-func (svc *adapterService) Subscribe(ctx context.Context, thingKey, chanID, subtopic string, c Client) error {
+func (svc *adapterService) Subscribe(ctx context.Context, chanID, subtopic string, c Client) error {
 	ar := &mainflux.AccessByKeyReq{
-		Token:  thingKey,
-		ChanID: chanID,
+		Token:  c.token,
+		ChanID: c.chanID,
 	}
 
-	if _, err := svc.auth.CanAccessByKey(ctx, ar); err != nil {
+	id, err := svc.auth.CanAccessByKey(ctx, ar)
+	if err != nil {
 		return errors.Wrap(errors.ErrAuthorization, err)
 	}
 
@@ -83,8 +84,9 @@ func (svc *adapterService) Subscribe(ctx context.Context, thingKey, chanID, subt
 	if subtopic != "" {
 		subject = fmt.Sprintf("%s.%s", subject, subtopic)
 	}
+	c.pubID = id.GetValue()
 
-	return svc.pubsub.Subscribe(thingKey, subject, c)
+	return svc.pubsub.Subscribe(c.pubID, subject, c)
 }
 
 func (svc *adapterService) Unsubscribe(ctx context.Context, thingKey, chanID, subtopic string) error {

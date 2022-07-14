@@ -44,7 +44,7 @@ func (lm *loggingMiddleware) Publish(ctx context.Context, token string, msg mess
 	return lm.svc.Publish(ctx, token, msg)
 }
 
-func (lm *loggingMiddleware) Subscribe(ctx context.Context, thingKey, chanID, subtopic string, c ws.Client) (err error) {
+func (lm *loggingMiddleware) Subscribe(ctx context.Context, chanID, subtopic string, c ws.Client) (err error) {
 	defer func(begin time.Time) {
 		destChannel := chanID
 		if subtopic != "" {
@@ -58,7 +58,7 @@ func (lm *loggingMiddleware) Subscribe(ctx context.Context, thingKey, chanID, su
 		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
 	}(time.Now())
 
-	return lm.svc.Subscribe(ctx, thingKey, chanID, subtopic, c)
+	return lm.svc.Subscribe(ctx, chanID, subtopic, c)
 }
 
 func (lm *loggingMiddleware) Unsubscribe(ctx context.Context, thingKey, chanID, subtopic string) (err error) {
