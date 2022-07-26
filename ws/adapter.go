@@ -9,6 +9,7 @@ package ws
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/mainflux/mainflux"
 	"github.com/mainflux/mainflux/pkg/errors"
@@ -29,7 +30,7 @@ var (
 // Service specifies web socket service API.
 type Service interface {
 	// Publish Message
-	Publish(ctx context.Context, token string, msg messaging.Message) error
+	Publish(ctx context.Context, token, channel, subtopic string, payload []byte) error
 
 	// Subscribes to a channel with specified id.
 	Subscribe(ctx context.Context, chanID, subtopic string, c Client) error
@@ -53,20 +54,27 @@ func New(auth mainflux.ThingsServiceClient, pubsub messaging.PubSub) Service {
 	}
 }
 
-func (svc *adapterService) Publish(ctx context.Context, token string, msg messaging.Message) error {
+func (svc *adapterService) Publish(ctx context.Context, token, channel, subtopic string, payload []byte) error {
 	ar := &mainflux.AccessByKeyReq{
 		Token:  token,
-		ChanID: msg.GetChannel(),
+		ChanID: channel,
 	}
 
-	thid, err := svc.auth.CanAccessByKey(ctx, ar)
+	id, err := svc.auth.CanAccessByKey(ctx, ar)
 	if err != nil {
 		return errors.Wrap(errors.ErrAuthorization, err)
 	}
 
-	msg.Publisher = thid.GetValue()
+	msg := messaging.Message{
+		Protocol:  "ws",
+		Channel:   channel,
+		Subtopic:  subtopic,
+		Payload:   payload,
+		Created:   time.Now().UnixNano(),
+		Publisher: id.GetValue(),
+	}
 
-	return svc.pubsub.Publish(msg.GetChannel(), msg)
+	return svc.pubsub.Publish(channel, msg)
 }
 
 func (svc *adapterService) Subscribe(ctx context.Context, chanID, subtopic string, c Client) error {
@@ -84,9 +92,25 @@ func (svc *adapterService) Subscribe(ctx context.Context, chanID, subtopic strin
 	if subtopic != "" {
 		subject = fmt.Sprintf("%s.%s", subject, subtopic)
 	}
-	c.pubID = id.GetValue()
+	handler := msgHandler{thingID: id.GetValue(), c: c}
 
-	return svc.pubsub.Subscribe(c.pubID, subject, c)
+	return svc.pubsub.Subscribe(id.GetValue(), subject, handler)
+}
+
+type msgHandler struct {
+	thingID string
+	c       Client
+}
+
+func (h msgHandler) Handle(msg messaging.Message) error {
+	if h.thingID == msg.Publisher {
+		return nil
+	}
+	return h.c.Handle(msg.Payload)
+}
+
+func (h msgHandler) Cancel() error {
+	return h.c.Cancel()
 }
 
 func (svc *adapterService) Unsubscribe(ctx context.Context, thingKey, chanID, subtopic string) error {

@@ -4,25 +4,19 @@
 package ws
 
 import (
-	"fmt"
-	"time"
-
 	"github.com/gorilla/websocket"
-	"github.com/mainflux/mainflux/pkg/messaging"
 )
 
 // Client wraps WS client.
 type Client struct {
-	pubID    string
 	token    string
 	chanID   string
 	subtopic string
 	conn     *websocket.Conn
 }
 
-func NewClient(id, token, chanID, subtopic string, conn *websocket.Conn) Client {
+func NewClient(token, chanID, subtopic string, conn *websocket.Conn) Client {
 	return Client{
-		pubID:    id,
 		token:    token,
 		chanID:   chanID,
 		subtopic: subtopic,
@@ -30,7 +24,7 @@ func NewClient(id, token, chanID, subtopic string, conn *websocket.Conn) Client 
 	}
 }
 
-func (c Client) Publish(channelID, subtopic string, msgs chan<- messaging.Message) {
+func (c Client) Publish(channelID, subtopic string, msgs chan<- []byte) {
 	for {
 		_, payload, err := c.conn.ReadMessage()
 		if websocket.IsUnexpectedCloseError(err) {
@@ -41,25 +35,12 @@ func (c Client) Publish(channelID, subtopic string, msgs chan<- messaging.Messag
 			return
 		}
 
-		msg := messaging.Message{
-			Protocol: "ws",
-			Channel:  channelID,
-			Subtopic: subtopic,
-			Payload:  payload,
-			Created:  time.Now().UnixNano(),
-		}
-		fmt.Println("sending ws")
-		msgs <- msg
+		msgs <- payload
 	}
 }
 
-func (c Client) Handle(msg messaging.Message) error {
-	format := websocket.TextMessage
-	if msg.Publisher == c.pubID {
-		return nil
-	}
-
-	if err := c.conn.WriteMessage(format, msg.Payload); err != nil {
+func (c Client) Handle(payload []byte) error {
+	if err := c.conn.WriteMessage(websocket.TextMessage, payload); err != nil {
 		// logger.Warn(fmt.Sprintf("Failed to broadcast message to thing: %s", err))
 		return err
 	}

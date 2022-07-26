@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/metrics"
-	"github.com/mainflux/mainflux/pkg/messaging"
 	"github.com/mainflux/mainflux/ws"
 )
 
@@ -30,13 +29,13 @@ func MetricsMiddleware(svc ws.Service, counter metrics.Counter, latency metrics.
 		svc:     svc,
 	}
 }
-func (mm *metricsMiddleware) Publish(ctx context.Context, token string, msg messaging.Message) error {
+func (mm *metricsMiddleware) Publish(ctx context.Context, token, channel, subtopic string, payload []byte) error {
 	defer func(begin time.Time) {
 		mm.counter.With("method", "publish").Add(1)
 		mm.latency.With("method", "publish").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
-	return mm.svc.Publish(ctx, token, msg)
+	return mm.svc.Publish(ctx, token, channel, subtopic, payload)
 }
 
 func (mm *metricsMiddleware) Subscribe(ctx context.Context, chanID, subtopic string, c ws.Client) error {

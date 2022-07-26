@@ -13,7 +13,6 @@ import (
 	"github.com/go-zoo/bone"
 	"github.com/mainflux/mainflux/internal/apiutil"
 	"github.com/mainflux/mainflux/pkg/errors"
-	"github.com/mainflux/mainflux/pkg/messaging"
 	"github.com/mainflux/mainflux/ws"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,21 +30,21 @@ func work(svc ws.Service) http.HandlerFunc {
 			encodeError(context.TODO(), err, w)
 		}
 		conn.SetCloseHandler(func(code int, text string) error {
-			return svc.Unsubscribe(context.TODO(), req.token, req.msg.Channel, req.msg.Subtopic)
+			return svc.Unsubscribe(context.TODO(), req.token, req.channel, req.subtopic)
 		})
-		c := ws.NewClient("", req.token, req.msg.Channel, req.msg.Subtopic, conn)
-		if err := svc.Subscribe(context.TODO(), req.msg.Channel, req.msg.Subtopic, c); err != nil {
+		c := ws.NewClient(req.token, req.channel, req.subtopic, conn)
+		if err := svc.Subscribe(context.TODO(), req.channel, req.subtopic, c); err != nil {
 			logger.Warn(err.Error())
 			encodeError(context.TODO(), err, w)
 		}
 
-		msgs := make(chan messaging.Message)
+		msgs := make(chan []byte)
 		go func() {
 			for msg := range msgs {
-				svc.Publish(context.Background(), req.token, msg)
+				svc.Publish(context.Background(), req.token, req.channel, req.subtopic, msg)
 			}
 		}()
-		go c.Publish(req.msg.Channel, req.msg.Subtopic, msgs)
+		go c.Publish(req.channel, req.subtopic, msgs)
 	}
 }
 
@@ -76,14 +75,12 @@ func decodeRequest(ctx context.Context, r *http.Request) (publishReq, error) {
 	defer r.Body.Close()
 
 	req := publishReq{
-		msg: messaging.Message{
-			Protocol: protocol,
-			Channel:  bone.GetValue(r, "id"),
-			Subtopic: subtopic,
-			Payload:  payload,
-			Created:  time.Now().UnixNano(),
-		},
-		token: token,
+		protocol: protocol,
+		channel:  bone.GetValue(r, "id"),
+		subtopic: subtopic,
+		payload:  payload,
+		created:  time.Now(),
+		token:    token,
 	}
 
 	return req, nil

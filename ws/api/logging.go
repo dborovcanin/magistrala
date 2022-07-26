@@ -11,7 +11,6 @@ import (
 	"time"
 
 	log "github.com/mainflux/mainflux/logger"
-	"github.com/mainflux/mainflux/pkg/messaging"
 	"github.com/mainflux/mainflux/ws"
 )
 
@@ -27,11 +26,11 @@ func LoggingMiddleware(svc ws.Service, logger log.Logger) ws.Service {
 	return &loggingMiddleware{logger, svc}
 }
 
-func (lm *loggingMiddleware) Publish(ctx context.Context, token string, msg messaging.Message) (err error) {
+func (lm *loggingMiddleware) Publish(ctx context.Context, token, channel, subtopic string, payload []byte) (err error) {
 	defer func(begin time.Time) {
-		destChannel := msg.GetChannel()
-		if msg.Subtopic != "" {
-			destChannel = fmt.Sprintf("%s.%s", destChannel, msg.Subtopic)
+		destChannel := channel
+		if subtopic != "" {
+			destChannel = fmt.Sprintf("%s.%s", destChannel, subtopic)
 		}
 		message := fmt.Sprintf("Method publish to %s took %s to complete", destChannel, time.Since(begin))
 		if err != nil {
@@ -41,7 +40,7 @@ func (lm *loggingMiddleware) Publish(ctx context.Context, token string, msg mess
 		lm.logger.Info(fmt.Sprintf("%s without errors.", message))
 	}(time.Now())
 
-	return lm.svc.Publish(ctx, token, msg)
+	return lm.svc.Publish(ctx, token, channel, subtopic, payload)
 }
 
 func (lm *loggingMiddleware) Subscribe(ctx context.Context, chanID, subtopic string, c ws.Client) (err error) {

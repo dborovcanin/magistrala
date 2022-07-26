@@ -1,13 +1,18 @@
 package api
 
 import (
+	"time"
+
 	"github.com/mainflux/mainflux/internal/apiutil"
-	"github.com/mainflux/mainflux/pkg/messaging"
 )
 
 type publishReq struct {
-	msg   messaging.Message
-	token string
+	protocol string
+	channel  string
+	subtopic string
+	payload  []byte
+	created  time.Time
+	token    string
 }
 
 func (req publishReq) validate() error {
