@@ -3,34 +3,65 @@
 
 package repository
 
-import "github.com/absmach/magistrala/pkg/errors"
+import (
+	"github.com/absmach/magistrala/pkg/errors"
+)
 
 // Wrapper for Repository errors.
-var (
-	// ErrMalformedEntity indicates a malformed entity specification.
-	ErrMalformedEntity = errors.New("malformed entity specification")
+type (
+	ConstraintError struct {
+		*errors.CustomError
+	}
 
-	// ErrNotFound indicates a non-existent entity request.
-	ErrNotFound = errors.New("entity not found")
+	WriteError struct {
+		*errors.CustomError
+	}
 
-	// ErrConflict indicates that entity already exists.
-	ErrConflict = errors.New("entity already exists")
+	ReadError struct {
+		*errors.CustomError
+	}
 
-	// ErrCreateEntity indicates error in creating entity or entities.
-	ErrCreateEntity = errors.New("failed to create entity in the db")
+	RollbackError struct {
+		*errors.CustomError
+	}
 
-	// ErrViewEntity indicates error in viewing entity or entities.
-	ErrViewEntity = errors.New("view entity failed")
+	TypeError struct {
+		*errors.CustomError
+	}
 
-	// ErrUpdateEntity indicates error in updating entity or entities.
-	ErrUpdateEntity = errors.New("update entity failed")
+	OtherError struct {
+		*errors.CustomError
+	}
 
-	// ErrRemoveEntity indicates error in removing entity.
-	ErrRemoveEntity = errors.New("failed to remove entity")
-
-	// ErrFailedOpDB indicates a failure in a database operation.
-	ErrFailedOpDB = errors.New("operation on db element failed")
-
-	// ErrFailedToRetrieveAllGroups failed to retrieve groups.
-	ErrFailedToRetrieveAllGroups = errors.New("failed to retrieve all groups")
+	NotFoundError struct {
+		*errors.CustomError
+	}
 )
+
+func NewConstraintError(text string, err error) *ConstraintError {
+	return &ConstraintError{errors.NewErr(text, err)}
+}
+
+func NewWriteError(text string, err error) *WriteError {
+	return &WriteError{errors.NewErr(text, err)}
+}
+
+func NewReadError(text string, err error) *ReadError {
+	return &ReadError{errors.NewErr(text, err)}
+}
+
+func NewRollbackError(rbErr, err error) *RollbackError {
+	return &RollbackError{errors.NewErr(rbErr.Error(), err)}
+}
+
+func NewTypeError(text string, err error) *TypeError {
+	return &TypeError{errors.NewErr(text, err)}
+}
+
+func NewOtherError(text string, err error) *OtherError {
+	return &OtherError{errors.NewErr(text, err)}
+}
+
+func NewNotFoundError(text string, err error) *NotFoundError {
+	return &NotFoundError{errors.NewErr(text, err)}
+}
